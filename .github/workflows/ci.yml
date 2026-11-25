@@ -1,0 +1,31 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install ".[dev]"
+      - run: pytest -q
+      - name: Accuracy and false-positive gate
+        run: teldiag evaluate --runs-per-class 20 --min-accuracy 0.95 --max-fp-rate 0.0 --out reports/metrics.json
+      - name: Severity sweep
+        run: teldiag sweep --runs-per-class 20 --out reports/sweep.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: reports
+          path: reports/
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -t teldiag .
+      - run: docker run --rm teldiag
