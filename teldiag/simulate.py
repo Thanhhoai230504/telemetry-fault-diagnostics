@@ -17,6 +17,7 @@ Fault types (at most one per run, starting at `onset`):
 """
 from __future__ import annotations
 
+import json
 from dataclasses import asdict, dataclass, field
 
 import numpy as np
@@ -55,25 +56,20 @@ class Run:
         np.savez_compressed(
             path, t=self.t, temp=self.temp, current=self.current, vib=self.vib,
             fault=self.fault, onset=np.nan if self.onset is None else self.onset,
-            seed=self.seed, params=np.array(repr(self.params)),
-            spec=np.array(repr(asdict(self.spec))),
+            seed=self.seed, params=np.array(json.dumps(self.params, default=float)),
+            spec=np.array(json.dumps(asdict(self.spec))),
         )
 
     @staticmethod
     def load(path: str) -> "Run":
         d = np.load(path, allow_pickle=False)
         onset = float(d["onset"])
-        spec = UnitSpec(**_literal(str(d["spec"])))
+        spec = UnitSpec(**json.loads(str(d["spec"])))
         return Run(
             t=d["t"], temp=d["temp"], current=d["current"], vib=d["vib"],
             fault=str(d["fault"]), onset=None if np.isnan(onset) else onset,
-            params=_literal(str(d["params"])), seed=int(d["seed"]), spec=spec,
+            params=json.loads(str(d["params"])), seed=int(d["seed"]), spec=spec,
         )
-
-
-def _literal(text: str) -> dict:
-    import ast
-    return ast.literal_eval(text)
 
 
 def simulate(fault: str = "none", seed: int = 0, duration: float = 1800.0,
@@ -118,7 +114,7 @@ def simulate(fault: str = "none", seed: int = 0, duration: float = 1800.0,
     temp = temp_true + rng.normal(0.0, 0.15, n)
     if fault == "drift":
         rate = float(rng.uniform(0.008, 0.02)) * severity * rng.choice([-1.0, 1.0])
-        params["drift_degC_per_s"] = round(rate, 4)
+        params["drift_degC_per_s"] = round(float(rate), 4)
         temp = temp + np.where(after, rate * (t - (onset or 0.0)), 0.0)
 
     current = i_true + rng.normal(0.0, 0.08, n)
